@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#F4EFE6" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="FlashCart" />
 <title>FlashCart — project kits, in a flash</title>
@@ -234,6 +234,11 @@
   .manual summary::-webkit-details-marker{display:none}
   .manual summary::before{content:"⌄ ";font-size:14px}
   .manual .hint{font-size:12.5px;color:var(--ink-2);margin:8px 0 12px}
+  .runbadge{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:2px 9px;
+    border-radius:999px;border:1px solid var(--line);color:var(--ink-2);background:var(--card);vertical-align:1px}
+  .runbadge.running{color:var(--flash);border-color:color-mix(in srgb,var(--flash) 40%,white);background:color-mix(in srgb,var(--flash) 8%,white)}
+  .runbadge.done{color:var(--garden);border-color:color-mix(in srgb,var(--garden) 40%,white);background:color-mix(in srgb,var(--garden) 8%,white)}
+  .runbadge.error{color:#b91c1c;border-color:#f0c4c4;background:#fdf3f3}
   .openbtn{margin-top:16px}
 
   .foot{padding:20px 18px calc(env(safe-area-inset-bottom) + 24px);color:var(--ink-2);font-size:11.5px;
@@ -267,9 +272,11 @@ const STORES = {
 };
 const searchUrl = (s,q) => s.searchTpl.replace('%s', encodeURIComponent(q));
 
-// Local cart-bot (the ace-cart-bot Playwright tool). When it's running on the
-// same machine, "Add to cart" hands the kit to it and it builds the real cart.
-const BOT = localStorage.getItem('fc.bot') || 'http://localhost:8090';
+// The cart-bot (ace-cart-bot). When this app is served BY the bot (open it at
+// http://localhost:8090), it's same-origin — so default to wherever we're served
+// from. Override with localStorage['fc.bot'] if the bot is elsewhere.
+const BOT = localStorage.getItem('fc.bot') ||
+  (location.origin && location.origin.startsWith('http') ? location.origin : 'http://localhost:8090');
 
 const CATS = {
   paint:  {label:'Paint & Stain', color:'var(--paint)', kits:['paint-a-room','wood-staining']},
@@ -370,7 +377,7 @@ function kitView(id){
         <div><div class="nm">${e(s.name)}</div><div class="kind">${e(s.kind)}</div></div>
         <div class="dist"><b>${e(s.dist)}</b>${e(s.area)}</div>
       </div>
-      <button class="cta" onclick="addToCart('${id}','${sid}')">${I.cart} Add ${k.items.length} items to cart</button>
+      <button class="cta" onclick="addToCart('${id}','${sid}')">${I.cart} Build this cart</button>
     </div>`;
   }).join('');
 
@@ -395,7 +402,7 @@ function kitView(id){
     <div class="slabel"><span>Stores near <b id="near" style="color:var(--ink)">${e(state.zip)}</b></span><div class="ln"></div><span class="num">2 found</span></div>
     <div class="stores" style="--c:${c}">${stores}</div>
 
-    <p class="foot">“Add to cart” opens the store's site and shows your kit list to check out.</p>
+    <p class="foot">“Build this cart” sends the kit to the cart-bot — it opens the store and adds every item, then drops you on your cart.</p>
   </section>`;
 }
 
@@ -411,9 +418,9 @@ function cartView(kitId, storeId){
 
   return `<section class="screen" style="--c:${c}">
     <button class="back" onclick="go('#/kit/${kitId}')">${I.arrow} Back to kit</button>
-    <p class="eyebrow" style="color:var(--garden)">✓ Kit sent · building cart</p>
-    <h1 class="title" style="font-size:28px">Your ${e(k.name)} cart</h1>
-    <p class="sub">Sending your kit to <b>${e(s.name)}</b>. If the cart-bot is running, it'll open the store and add every item for you.</p>
+    <p class="eyebrow" style="color:var(--c)">Your cart · <span id="runbadge" class="runbadge">ready to build</span></p>
+    <h1 class="title" style="font-size:28px">${e(k.name)} at ${e(s.name)}</h1>
+    <p class="sub">The cart-bot opens ${e(s.name)}, finds each item, and adds it to the cart. It runs in the background — leave this page and it keeps going.</p>
 
     <div class="receipt" style="--c:${c}">
       <div class="rhead">
@@ -424,7 +431,7 @@ function cartView(kitId, storeId){
       <div class="rfoot"><span>${k.items.length} items in kit</span><b>Ready to add</b></div>
     </div>
 
-    <button class="cta openbtn" id="botbtn" onclick="startBot('${kitId}','${storeId}')">${I.cart} Build this cart at ${e(s.name)}</button>
+    <button class="cta openbtn" id="botbtn" onclick="startRun('${kitId}','${storeId}')">${I.cart} Build this cart</button>
     <div id="botlog" class="botlog" hidden></div>
 
     <details class="manual">
@@ -433,7 +440,7 @@ function cartView(kitId, storeId){
       <p class="hint">Then tap <b>find</b> on any item above to search it at the store.</p>
     </details>
 
-    <div class="note">${I.info}<div><b>How auto-build works —</b> a web page can't write to ${e(s.name)}'s cart directly (browser security + store bot-protection). So FlashCart hands your kit to the <b>cart-bot</b> (the <code>ace-cart-bot</code> tool), which drives a real browser to search each item and click <b>Add&nbsp;to&nbsp;Cart</b>. Run it locally first: <code>cd ace-cart-bot &amp;&amp; npm start</code>. It only works on the same computer that's running the bot.</div></div>
+    <div class="note">${I.info}<div><b>How auto-build works —</b> a web page can't write to ${e(s.name)}'s cart directly (browser security + store bot-protection), so FlashCart hands the kit to the <b>cart-bot</b>, which drives a real browser to search each item and click <b>Add&nbsp;to&nbsp;Cart</b>. To use it: run <code>cd ace-cart-bot &amp;&amp; npm start</code>, then open this app at <code>http://localhost:8090</code>. On a phone or the Vercel link the bot can't be reached — use the manual links above.</div></div>
 
     <p class="foot">Wrong store? <a href="#/kit/${kitId}" style="color:var(--ink)">pick the other option →</a></p>
   </section>`;
@@ -443,61 +450,74 @@ function notFound(){
   return `<section class="screen"><h1 class="title">Not found</h1><p class="sub">That kit doesn't exist.</p><button class="cta" style="margin-top:16px" onclick="go('#/')">Back home</button></section>`;
 }
 
-/* ----------------------------- router ----------------------------- */
+/* ----------------------------- router + background bot runs ----------------------------- */
 function go(hash){ location.hash = hash; }
-function setTab(t){
-  state.tab = t; localStorage.setItem('fc.tab', t);
-  render();
-}
-let pendingBot = null;          // {kitId,storeId} to auto-run once the cart screen renders
-let botES = null;               // active EventSource to the cart-bot
+function setTab(t){ state.tab = t; localStorage.setItem('fc.tab', t); render(); }
 
-function addToCart(kitId, storeId){
-  // Go to the cart screen and let it kick off the bot once rendered.
-  pendingBot = { kitId, storeId };
-  go(`#/cart/${kitId}/${storeId}`);
-}
+// Each cart-bot run is keyed by kit/store and owns a persistent EventSource, so
+// it keeps running in the background while you move between screens (home, etc).
+const runs = {};
+let onRunUpdate = null;                       // the visible cart view registers this
+const runKey = (k, s) => k + '/' + s;
 
-function botLine(message, level='info'){
-  const box = document.getElementById('botlog');
-  if(!box) return;
-  box.hidden = false;
-  const ICON = { info:'·', success:'✓', warn:'!', error:'✗' };
-  const div = document.createElement('div');
-  div.className = 'bl ' + level;
-  div.textContent = (ICON[level]||'·') + '  ' + message;
-  box.appendChild(div); box.scrollTop = box.scrollHeight;
-}
+function startRun(kitId, storeId){
+  const key = runKey(kitId, storeId);
+  if(runs[key] && runs[key].status === 'running'){ if(onRunUpdate) onRunUpdate(key); return runs[key]; }
 
-function startBot(kitId, storeId){
   const k = KITS[kitId], s = STORES[storeId];
-  const btn = document.getElementById('botbtn'), box = document.getElementById('botlog');
-  if(!box) return;
-  if(botES){ botES.close(); botES = null; }
-  box.innerHTML = ''; box.hidden = false;
-  if(btn){ btn.setAttribute('disabled',''); btn.textContent = 'Building cart…'; }
-  botLine(`Handing your kit to the cart-bot at ${BOT}…`);
+  const r = runs[key] = { kitId, storeId, lines:[], status:'running', es:null };
+  const push = (message, level='info') => { r.lines.push({ message, level }); if(onRunUpdate) onRunUpdate(key); };
 
+  push(`Opening ${s.name} and adding ${k.items.length} items…`);
   const qs = new URLSearchParams({
-    items: JSON.stringify(k.items), zip: state.zip, headless:'false',
+    items: JSON.stringify(k.items), zip: state.zip, headless: 'false',
     storeName: s.name, storeBase: s.home, searchTpl: s.searchTpl,
   });
   let gotAny = false;
-  const done = (label, level)=>{ if(botES){botES.close();botES=null;} if(btn){btn.removeAttribute('disabled');btn.textContent=label;} };
+  try { r.es = new EventSource(`${BOT}/run?` + qs.toString()); }
+  catch(_) { r.status = 'error'; push('Cart-bot not reachable on this device.', 'error'); return r; }
 
-  try { botES = new EventSource(`${BOT}/run?` + qs.toString()); }
-  catch(_) { botLine('Cart-bot not reachable.', 'error'); return done('Try again', 'error'); }
-
-  botES.addEventListener('progress', ev=>{ gotAny=true; const d=JSON.parse(ev.data); botLine(d.message, d.level); });
-  botES.addEventListener('done', ()=>{ botLine('Cart-bot finished — check the browser window it opened.', 'success'); done(`Built at ${s.name}`, 'success'); });
-  botES.onerror = ()=>{
+  r.es.addEventListener('progress', ev => { gotAny = true; const d = JSON.parse(ev.data); push(d.message, d.level); });
+  r.es.addEventListener('done', () => {
+    r.status = 'done';
+    push('Cart built — your items are in the store window the bot opened.', 'success');
+    if(r.es){ r.es.close(); r.es = null; }
+    if(onRunUpdate) onRunUpdate(key);
+  });
+  r.es.onerror = () => {
     if(!gotAny){
-      botLine('Couldn’t reach the cart-bot. Start it on this computer:', 'error');
-      botLine('cd ace-cart-bot && npm start   (then tap “Build this cart” again)', 'warn');
-      botLine('Auto-build only works on the same machine running the bot — on a phone, use the manual links above.', 'info');
+      r.status = 'error';
+      push('Couldn’t reach the cart-bot on this device.', 'error');
+      push('Run it on this computer: cd ace-cart-bot && npm start — then open this app at http://localhost:8090.', 'warn');
     }
-    done('Build this cart', 'error');
+    if(r.es){ r.es.close(); r.es = null; }
+    if(onRunUpdate) onRunUpdate(key);
   };
+  return r;
+}
+
+// "Build this cart": kick off the background run, then drop onto the cart page.
+function addToCart(kitId, storeId){ startRun(kitId, storeId); go(`#/cart/${kitId}/${storeId}`); }
+
+function paintRun(key){
+  const r = runs[key]; if(!r) return;
+  const box = document.getElementById('botlog');
+  const badge = document.getElementById('runbadge');
+  const btn = document.getElementById('botbtn');
+  const ICON = { info:'·', success:'✓', warn:'!', error:'✗' };
+  if(box){
+    box.hidden = r.lines.length === 0;
+    box.innerHTML = r.lines.map(l => `<span class="bl ${l.level}">${ICON[l.level]||'·'}  ${e(l.message)}</span>`).join('');
+    box.scrollTop = box.scrollHeight;
+  }
+  if(badge){
+    badge.textContent = r.status==='running' ? 'building…' : r.status==='done' ? 'cart built ✓' : 'needs the local bot';
+    badge.className = 'runbadge ' + r.status;
+  }
+  if(btn){
+    if(r.status==='running'){ btn.setAttribute('disabled',''); btn.textContent = 'Building…'; }
+    else { btn.removeAttribute('disabled'); btn.textContent = (r.status==='done' ? 'Rebuild this cart' : 'Build this cart'); }
+  }
 }
 
 function render(){
@@ -507,13 +527,18 @@ function render(){
   if(parts[0]==='kit' && parts[1]) html = kitView(parts[1]);
   else if(parts[0]==='cart' && parts[1] && parts[2]) html = cartView(parts[1], parts[2]);
   else html = homeView();
-  if(botES && parts[0] !== 'cart'){ botES.close(); botES = null; } // leaving cart: stop listening
   const app = document.getElementById('app');
   app.innerHTML = html;
   app.scrollTo?.(0,0); window.scrollTo(0,0);
   document.getElementById('barzip').textContent = state.zip || '—';
-  // Auto-start the bot when we land on a cart via "Add to cart".
-  if(pendingBot && parts[0]==='cart'){ const pb = pendingBot; pendingBot = null; setTimeout(()=>startBot(pb.kitId, pb.storeId), 60); }
+
+  // Wire the cart view to its background run (live + replayed on return).
+  onRunUpdate = null;
+  if(parts[0]==='cart' && parts[1] && parts[2]){
+    const key = runKey(parts[1], parts[2]);
+    onRunUpdate = (k) => { if(k === key) paintRun(key); };
+    if(runs[key]) paintRun(key);
+  }
 }
 window.addEventListener('hashchange', render);
 render();
