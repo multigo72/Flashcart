@@ -1,0 +1,15 @@
+{
+  "name": "ace-cart-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Adds a list of items to an Ace Hardware cart for a store near a given zip, using Playwright browser automation. Includes a simple local web UI.",
+  "scripts": {
+    "postinstall": "playwright install chromium",
+    "start": "node server.js",
+    "cli": "node src/cli.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

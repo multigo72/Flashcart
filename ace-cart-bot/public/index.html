@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FlashCart · Ace Hardware</title>
+  <style>
+    :root {
+      --red: #e4002b;          /* Ace red */
+      --ink: #16181d;
+      --muted: #6b7280;
+      --line: #e6e8ec;
+      --bg: #f5f6f8;
+      --card: #ffffff;
+      --ok: #15803d;
+      --warn: #b45309;
+      --err: #b91c1c;
+      --radius: 14px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: var(--font); color: var(--ink); background: var(--bg);
+      -webkit-font-smoothing: antialiased; line-height: 1.45;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+    .badge {
+      width: 40px; height: 40px; border-radius: 10px; background: var(--red); color: #fff;
+      display: grid; place-items: center; font-weight: 800; font-size: 20px; flex: none;
+    }
+    h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+    .sub { color: var(--muted); font-size: 14px; margin: 2px 0 24px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 20px; margin-bottom: 18px;
+    }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .row { display: flex; gap: 10px; align-items: center; }
+    input[type="text"] {
+      width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px;
+      font-size: 15px; font-family: inherit; background: #fff; color: var(--ink);
+    }
+    input[type="text"]:focus { outline: 2px solid var(--red); outline-offset: 1px; border-color: transparent; }
+    .zip { max-width: 150px; }
+    .items { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+    .items .row .del {
+      flex: none; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line);
+      background: #fff; color: var(--muted); font-size: 18px; cursor: pointer;
+    }
+    .items .row .del:hover { color: var(--err); border-color: #f3c2c2; }
+    .add-item {
+      margin-top: 12px; background: none; border: 1px dashed #c9ccd2; color: var(--muted);
+      padding: 9px 12px; border-radius: 10px; font-size: 14px; cursor: pointer; font-family: inherit;
+    }
+    .add-item:hover { color: var(--ink); border-color: var(--muted); }
+    .opts { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; margin-top: 6px; }
+    .opts input { width: 16px; height: 16px; accent-color: var(--red); }
+    .go {
+      width: 100%; padding: 14px; border: 0; border-radius: 12px; background: var(--red); color: #fff;
+      font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit;
+      transition: transform .04s ease, opacity .15s ease;
+    }
+    .go:hover { opacity: .94; }
+    .go:active { transform: translateY(1px); }
+    .go:disabled { opacity: .5; cursor: progress; }
+    .go.stop { background: #4b5563; }
+    .go.stop::before { content: "■ "; font-size: 12px; }
+    .console {
+      background: #0f1115; color: #d7dbe0; border-radius: 12px; padding: 14px 16px;
+      font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; min-height: 60px;
+      max-height: 340px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+    }
+    .console .ln { display: flex; gap: 8px; }
+    .console .ico { flex: none; width: 14px; text-align: center; }
+    .lvl-info .ico { color: #7c8696; }
+    .lvl-success { color: #67e08a; } .lvl-success .ico { color: #67e08a; }
+    .lvl-warn { color: #f0c36d; } .lvl-warn .ico { color: #f0c36d; }
+    .lvl-error { color: #ff8585; } .lvl-error .ico { color: #ff8585; }
+    .shot { margin-top: 14px; }
+    .shot img { width: 100%; border: 1px solid var(--line); border-radius: 12px; display: block; }
+    .note { font-size: 12.5px; color: var(--muted); margin-top: 14px; }
+    .note b { color: var(--ink); }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="badge">A</div>
+      <div>
+        <h1>FlashCart</h1>
+        <div class="sub">Adds your list to an Ace Hardware cart for a store near your zip.</div>
+      </div>
+    </header>
+
+    <div class="card">
+      <label for="zip">Store zip code</label>
+      <input id="zip" class="zip" type="text" value="98177" inputmode="numeric" />
+
+      <label style="margin-top:18px">Items to add</label>
+      <ul id="items" class="items"></ul>
+      <button id="addItem" class="add-item" type="button">+ Add item</button>
+
+      <div class="opts" style="margin-top:18px">
+        <input id="watch" type="checkbox" checked />
+        <label for="watch" style="margin:0;font-weight:500;cursor:pointer">
+          Watch the browser (recommended — lets you solve a captcha or sign in if asked)
+        </label>
+      </div>
+    </div>
+
+    <button id="go" class="go">Add to cart</button>
+
+    <div id="out" class="card hidden" style="margin-top:18px">
+      <label>Progress</label>
+      <div id="console" class="console"></div>
+      <div id="shot" class="shot hidden"><img id="shotImg" alt="cart screenshot" /></div>
+    </div>
+
+    <p class="note">
+      <b>Heads up:</b> acehardware.com is behind <b>Cloudflare bot protection</b>. When the
+      "Verify you are human" box appears in the browser window, tick it (and pick your local Ace if
+      asked) — the bot detects this, waits, and continues on its own. Keep <b>Watch the browser</b>
+      checked so you can do that. It fills the cart only — it never checks out or pays. Tune
+      selectors in <code>src/sites/ace.js</code> if a step can't find something.
+    </p>
+  </div>
+
+  <script>
+    const DEFAULT_ITEMS = ['paint roller', "painter's tape"];
+    const itemsEl = document.getElementById('items');
+
+    function addItemRow(value = '') {
+      const li = document.createElement('li');
+      li.className = 'row';
+      li.innerHTML =
+        '<input type="text" placeholder="e.g. 9 in paint roller" />' +
+        '<button class="del" title="Remove" type="button">×</button>';
+      li.querySelector('input').value = value;
+      li.querySelector('.del').onclick = () => li.remove();
+      itemsEl.appendChild(li);
+    }
+    DEFAULT_ITEMS.forEach(addItemRow);
+    document.getElementById('addItem').onclick = () => addItemRow();
+
+    const go = document.getElementById('go');
+    const out = document.getElementById('out');
+    const consoleEl = document.getElementById('console');
+    const shot = document.getElementById('shot');
+    const shotImg = document.getElementById('shotImg');
+    const ICON = { info: '·', success: '✓', warn: '!', error: '✗' };
+
+    function logLine({ message, level = 'info' }) {
+      const div = document.createElement('div');
+      div.className = 'ln lvl-' + level;
+      div.innerHTML = '<span class="ico">' + (ICON[level] || '·') + '</span><span></span>';
+      div.lastChild.textContent = message;
+      consoleEl.appendChild(div);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    let es = null;          // active EventSource
+    let running = false;
+    let watchdog = null;
+
+    function setRunning(on) {
+      running = on;
+      go.textContent = on ? 'Stop' : 'Add to cart';
+      go.classList.toggle('stop', on);
+    }
+
+    function showShot(url) {
+      if (!url) return;
+      shotImg.src = url + '?t=' + Date.now();
+      shot.classList.remove('hidden');
+    }
+
+    function armWatchdog() {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
+        if (running) logLine({ message: 'Still working… if a browser window opened, finish any "Verify you are human" step there. Or click Stop to cancel.', level: 'warn' });
+      }, 25000);
+    }
+
+    function endRun(note) {
+      if (es) { es.close(); es = null; }
+      if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+      if (note) logLine(note);
+      setRunning(false);
+    }
+
+    async function stopRun() {
+      endRun({ message: 'Stopped.', level: 'warn' });
+      try { await fetch('/stop'); } catch {}
+    }
+
+    function startRun() {
+      const items = [...itemsEl.querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
+      const zip = document.getElementById('zip').value.trim() || '98177';
+      const headless = !document.getElementById('watch').checked;
+      if (!items.length) { alert('Add at least one item.'); return; }
+
+      consoleEl.innerHTML = '';
+      shot.classList.add('hidden');
+      out.classList.remove('hidden');
+      setRunning(true);
+      logLine({ message: headless
+        ? 'Starting… launching a headless browser.'
+        : 'Starting… a browser window will open. Watch it for a "Verify you are human" box and tick it — I continue automatically.', level: 'info' });
+      armWatchdog();
+
+      const qs = new URLSearchParams({ items: JSON.stringify(items), zip, headless: String(headless) });
+      es = new EventSource('/run?' + qs.toString());
+
+      es.addEventListener('progress', (e) => {
+        const data = JSON.parse(e.data);
+        logLine(data);
+        showShot(data.screenshot);
+        armWatchdog();
+      });
+      es.addEventListener('done', (e) => {
+        showShot(JSON.parse(e.data).screenshot);
+        endRun();
+      });
+      es.onerror = () => {
+        // Stream ended or dropped. Stop here instead of letting EventSource auto-reconnect.
+        endRun(running ? { message: 'Connection closed.', level: 'warn' } : null);
+      };
+    }
+
+    go.onclick = () => (running ? stopRun() : startRun());
+  </script>
+</body>
+</html>
