@@ -14,12 +14,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8090;
 
 const send = (res, code, type, body) => {
-  res.writeHead(code, { 'Content-Type': type });
+  res.writeHead(code, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' });
   res.end(body);
+};
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
 };
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
+
+  // Allow the FlashCart page (a different origin) to call this bot.
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS);
+    return res.end();
+  }
 
   // --- UI ---
   if (url.pathname === '/' || url.pathname === '/index.html') {
@@ -51,6 +63,7 @@ const server = http.createServer(async (req, res) => {
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no', // stop nginx/proxies (incl. the preview panel) buffering SSE
+      ...CORS,
     });
     res.write(': connected\n\n'); // flush headers immediately so the client knows we're live
 
@@ -74,13 +87,21 @@ const server = http.createServer(async (req, res) => {
     const zip = url.searchParams.get('zip') || DEFAULT_ZIP;
     const headless = url.searchParams.get('headless') === 'true';
 
+    // Optional target store (sent by FlashCart) → drives the generic adapter.
+    const storeBase = url.searchParams.get('storeBase');
+    const searchTpl = url.searchParams.get('searchTpl');
+    const store =
+      storeBase && searchTpl
+        ? { name: url.searchParams.get('storeName') || 'store', baseUrl: storeBase, searchTpl }
+        : null;
+
     if (items.length === 0) {
       emit('progress', { message: 'No items provided.', level: 'error' });
       emit('done', { ok: false });
       return finish();
     }
 
-    addItemsToCart({ items, zip, headless, onProgress: (e) => emit('progress', e) })
+    addItemsToCart({ items, zip, store, headless, onProgress: (e) => emit('progress', e) })
       .then((result) => {
         emit('done', { ok: true, ...result });
         finish();

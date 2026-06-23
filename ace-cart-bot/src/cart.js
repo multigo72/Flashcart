@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 import { ace } from './sites/ace.js';
+import { makeGenericStore } from './sites/generic.js';
 import { USER_AGENT, VIEWPORT } from './config.js';
 
 const SITES = { ace };
@@ -36,7 +37,8 @@ export async function stopActiveRun() {
  * @param {object}   opts
  * @param {string[]} opts.items     item search terms
  * @param {string}   opts.zip       store zip code
- * @param {string}   [opts.site]    site id (default 'ace')
+ * @param {string}   [opts.site]    built-in site id (default 'ace')
+ * @param {{name:string,baseUrl:string,searchTpl:string}} [opts.store]  target any store generically
  * @param {boolean}  [opts.headless] run without a visible window (default false)
  * @param {(e: {message:string, level?:string, screenshot?:string}) => void} [opts.onProgress]
  */
@@ -44,10 +46,13 @@ export async function addItemsToCart({
   items,
   zip,
   site = 'ace',
+  store = null,
   headless = false,
   onProgress = () => {},
 }) {
-  const def = SITES[site];
+  // A `store` config (from FlashCart) targets any store via the generic adapter;
+  // otherwise fall back to a built-in site adapter (e.g. Ace's store-modal flow).
+  const def = store && store.baseUrl && store.searchTpl ? makeGenericStore(store) : SITES[site];
   if (!def) throw new Error(`Unknown site "${site}". Known: ${Object.keys(SITES).join(', ')}`);
 
   const log = (message, opts = {}) => onProgress({ message, level: opts.level || 'info', ...opts });

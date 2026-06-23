@@ -221,6 +221,19 @@
   .note{display:flex;gap:10px;margin-top:16px;background:color-mix(in srgb,var(--gold) 22%, white);
     border:1.5px solid var(--ink);border-radius:12px;padding:13px 14px;font-size:13px;line-height:1.5}
   .note svg{flex:none;width:18px;height:18px;margin-top:1px}
+  .note code{font-family:var(--mono);font-size:12px;background:rgba(27,24,21,.08);padding:1px 5px;border-radius:5px}
+
+  /* cart-bot live log */
+  .botlog{margin-top:12px;background:#14110d;color:#e7ddcb;border:1.5px solid var(--ink);border-radius:12px;
+    box-shadow:4px 4px 0 var(--ink);padding:12px 14px;font:12px/1.65 var(--mono);max-height:240px;overflow-y:auto;
+    white-space:pre-wrap;word-break:break-word}
+  .botlog .bl{display:block}
+  .botlog .success{color:#7fe39a}.botlog .warn{color:#f4c66a}.botlog .error{color:#ff9a8a}.botlog .info{color:#b6ab95}
+  .manual{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--card);padding:2px 14px}
+  .manual summary{cursor:pointer;font-family:var(--mono);font-size:12px;color:var(--ink-2);padding:11px 0;list-style:none}
+  .manual summary::-webkit-details-marker{display:none}
+  .manual summary::before{content:"⌄ ";font-size:14px}
+  .manual .hint{font-size:12.5px;color:var(--ink-2);margin:8px 0 12px}
   .openbtn{margin-top:16px}
 
   .foot{padding:20px 18px calc(env(safe-area-inset-bottom) + 24px);color:var(--ink-2);font-size:11.5px;
@@ -244,14 +257,19 @@
 const STORES = {
   ace:     {name:'Ace Hardware',     kind:'Neighborhood hardware', logo:'A', color:'#C8102E',
             area:'Shoreline',  dist:'1.8 mi', home:'https://www.acehardware.com',
-            search:q=>`https://www.acehardware.com/search?query=${encodeURIComponent(q)}`},
+            searchTpl:'https://www.acehardware.com/search?query=%s'},
   sherwin: {name:'Sherwin-Williams', kind:'Paint & stain store',   logo:'SW',color:'#0B4DA2',
             area:'N. Seattle', dist:'2.3 mi', home:'https://www.sherwin-williams.com',
-            search:q=>`https://www.sherwin-williams.com/en-us/search?q=${encodeURIComponent(q)}`},
+            searchTpl:'https://www.sherwin-williams.com/en-us/search?q=%s'},
   sky:     {name:'Sky Nursery',      kind:'Garden center',         logo:'SN',color:'#2E7D32',
             area:'Shoreline',  dist:'0.9 mi', home:'https://skynursery.com',
-            search:q=>`https://skynursery.com/?s=${encodeURIComponent(q)}`},
+            searchTpl:'https://skynursery.com/?s=%s'},
 };
+const searchUrl = (s,q) => s.searchTpl.replace('%s', encodeURIComponent(q));
+
+// Local cart-bot (the ace-cart-bot Playwright tool). When it's running on the
+// same machine, "Add to cart" hands the kit to it and it builds the real cart.
+const BOT = localStorage.getItem('fc.bot') || 'http://localhost:8090';
 
 const CATS = {
   paint:  {label:'Paint & Stain', color:'var(--paint)', kits:['paint-a-room','wood-staining']},
@@ -388,14 +406,14 @@ function cartView(kitId, storeId){
   const lines = k.items.map((it,i)=>`<div class="cartline">
       <span class="n">${String(i+1).padStart(2,'0')}</span>
       <span class="nm">${e(it)}</span>
-      <a href="${s.search(it)}" target="_blank" rel="noopener">find ${I.ext}</a>
+      <a href="${searchUrl(s,it)}" target="_blank" rel="noopener">find ${I.ext}</a>
     </div>`).join('');
 
   return `<section class="screen" style="--c:${c}">
     <button class="back" onclick="go('#/kit/${kitId}')">${I.arrow} Back to kit</button>
-    <p class="eyebrow" style="color:var(--garden)">✓ Kit sent · cart ready</p>
+    <p class="eyebrow" style="color:var(--garden)">✓ Kit sent · building cart</p>
     <h1 class="title" style="font-size:28px">Your ${e(k.name)} cart</h1>
-    <p class="sub">We opened <b>${e(s.name)}</b> in a new tab. Here's everything in your kit — tap <b>find</b> on any item to drop it in their cart.</p>
+    <p class="sub">Sending your kit to <b>${e(s.name)}</b>. If the cart-bot is running, it'll open the store and add every item for you.</p>
 
     <div class="receipt" style="--c:${c}">
       <div class="rhead">
@@ -406,9 +424,16 @@ function cartView(kitId, storeId){
       <div class="rfoot"><span>${k.items.length} items in kit</span><b>Ready to add</b></div>
     </div>
 
-    <button class="cta openbtn" onclick="window.open('${s.home}','_blank','noopener')">${I.ext} Open ${e(s.name)}</button>
+    <button class="cta openbtn" id="botbtn" onclick="startBot('${kitId}','${storeId}')">${I.cart} Build this cart at ${e(s.name)}</button>
+    <div id="botlog" class="botlog" hidden></div>
 
-    <div class="note">${I.info}<div><b>How this works —</b> a web page can't drop items straight into ${e(s.name)}'s cart for you — browsers block one site from scripting another, and stores like this sit behind bot protection. So FlashCart opens the store pre-searched for your items; tap <b>find</b> on each to add it there. Want it fully hands-off? Use the <b>ace-cart-bot</b> tool in this repo — it drives a real browser to click “Add to Cart” for you.</div></div>
+    <details class="manual">
+      <summary>Prefer to do it by hand?</summary>
+      <button class="cta ghost" style="margin-top:10px" onclick="window.open('${s.home}','_blank','noopener')">${I.ext} Open ${e(s.name)}</button>
+      <p class="hint">Then tap <b>find</b> on any item above to search it at the store.</p>
+    </details>
+
+    <div class="note">${I.info}<div><b>How auto-build works —</b> a web page can't write to ${e(s.name)}'s cart directly (browser security + store bot-protection). So FlashCart hands your kit to the <b>cart-bot</b> (the <code>ace-cart-bot</code> tool), which drives a real browser to search each item and click <b>Add&nbsp;to&nbsp;Cart</b>. Run it locally first: <code>cd ace-cart-bot &amp;&amp; npm start</code>. It only works on the same computer that's running the bot.</div></div>
 
     <p class="foot">Wrong store? <a href="#/kit/${kitId}" style="color:var(--ink)">pick the other option →</a></p>
   </section>`;
@@ -424,14 +449,57 @@ function setTab(t){
   state.tab = t; localStorage.setItem('fc.tab', t);
   render();
 }
+let pendingBot = null;          // {kitId,storeId} to auto-run once the cart screen renders
+let botES = null;               // active EventSource to the cart-bot
+
 function addToCart(kitId, storeId){
-  const s = STORES[storeId], k = KITS[kitId];
-  // A web page can't write to another store's cart (browser same-origin policy),
-  // so we open the store in a new tab, pre-searched for the kit's items so they
-  // turn up immediately. The cart screen links the rest, one tap each.
-  try{ window.open(s.search(k.items[0]),'_blank','noopener'); }catch(_){}
+  // Go to the cart screen and let it kick off the bot once rendered.
+  pendingBot = { kitId, storeId };
   go(`#/cart/${kitId}/${storeId}`);
 }
+
+function botLine(message, level='info'){
+  const box = document.getElementById('botlog');
+  if(!box) return;
+  box.hidden = false;
+  const ICON = { info:'·', success:'✓', warn:'!', error:'✗' };
+  const div = document.createElement('div');
+  div.className = 'bl ' + level;
+  div.textContent = (ICON[level]||'·') + '  ' + message;
+  box.appendChild(div); box.scrollTop = box.scrollHeight;
+}
+
+function startBot(kitId, storeId){
+  const k = KITS[kitId], s = STORES[storeId];
+  const btn = document.getElementById('botbtn'), box = document.getElementById('botlog');
+  if(!box) return;
+  if(botES){ botES.close(); botES = null; }
+  box.innerHTML = ''; box.hidden = false;
+  if(btn){ btn.setAttribute('disabled',''); btn.textContent = 'Building cart…'; }
+  botLine(`Handing your kit to the cart-bot at ${BOT}…`);
+
+  const qs = new URLSearchParams({
+    items: JSON.stringify(k.items), zip: state.zip, headless:'false',
+    storeName: s.name, storeBase: s.home, searchTpl: s.searchTpl,
+  });
+  let gotAny = false;
+  const done = (label, level)=>{ if(botES){botES.close();botES=null;} if(btn){btn.removeAttribute('disabled');btn.textContent=label;} };
+
+  try { botES = new EventSource(`${BOT}/run?` + qs.toString()); }
+  catch(_) { botLine('Cart-bot not reachable.', 'error'); return done('Try again', 'error'); }
+
+  botES.addEventListener('progress', ev=>{ gotAny=true; const d=JSON.parse(ev.data); botLine(d.message, d.level); });
+  botES.addEventListener('done', ()=>{ botLine('Cart-bot finished — check the browser window it opened.', 'success'); done(`Built at ${s.name}`, 'success'); });
+  botES.onerror = ()=>{
+    if(!gotAny){
+      botLine('Couldn’t reach the cart-bot. Start it on this computer:', 'error');
+      botLine('cd ace-cart-bot && npm start   (then tap “Build this cart” again)', 'warn');
+      botLine('Auto-build only works on the same machine running the bot — on a phone, use the manual links above.', 'info');
+    }
+    done('Build this cart', 'error');
+  };
+}
+
 function render(){
   const h = location.hash.replace(/^#/,'') || '/';
   const parts = h.split('/').filter(Boolean);
@@ -439,10 +507,13 @@ function render(){
   if(parts[0]==='kit' && parts[1]) html = kitView(parts[1]);
   else if(parts[0]==='cart' && parts[1] && parts[2]) html = cartView(parts[1], parts[2]);
   else html = homeView();
+  if(botES && parts[0] !== 'cart'){ botES.close(); botES = null; } // leaving cart: stop listening
   const app = document.getElementById('app');
   app.innerHTML = html;
   app.scrollTo?.(0,0); window.scrollTo(0,0);
   document.getElementById('barzip').textContent = state.zip || '—';
+  // Auto-start the bot when we land on a cart via "Add to cart".
+  if(pendingBot && parts[0]==='cart'){ const pb = pendingBot; pendingBot = null; setTimeout(()=>startBot(pb.kitId, pb.storeId), 60); }
 }
 window.addEventListener('hashchange', render);
 render();
