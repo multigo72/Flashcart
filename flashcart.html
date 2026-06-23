@@ -408,7 +408,7 @@ function cartView(kitId, storeId){
 
     <button class="cta openbtn" onclick="window.open('${s.home}','_blank','noopener')">${I.ext} Open ${e(s.name)}</button>
 
-    <div class="note">${I.info}<div><b>Heads up —</b> FlashCart is a shopping-list concept. It opens the store and lists your kit; the store's own page completes add-to-cart &amp; checkout. Stores shown are local options, never Home Depot or Lowe's.</div></div>
+    <div class="note">${I.info}<div><b>How this works —</b> a web page can't drop items straight into ${e(s.name)}'s cart for you — browsers block one site from scripting another, and stores like this sit behind bot protection. So FlashCart opens the store pre-searched for your items; tap <b>find</b> on each to add it there. Want it fully hands-off? Use the <b>ace-cart-bot</b> tool in this repo — it drives a real browser to click “Add to Cart” for you.</div></div>
 
     <p class="foot">Wrong store? <a href="#/kit/${kitId}" style="color:var(--ink)">pick the other option →</a></p>
   </section>`;
@@ -425,8 +425,11 @@ function setTab(t){
   render();
 }
 function addToCart(kitId, storeId){
-  const s = STORES[storeId];
-  try{ window.open(s.home,'_blank','noopener'); }catch(_){}
+  const s = STORES[storeId], k = KITS[kitId];
+  // A web page can't write to another store's cart (browser same-origin policy),
+  // so we open the store in a new tab, pre-searched for the kit's items so they
+  // turn up immediately. The cart screen links the rest, one tap each.
+  try{ window.open(s.search(k.items[0]),'_blank','noopener'); }catch(_){}
   go(`#/cart/${kitId}/${storeId}`);
 }
 function render(){
