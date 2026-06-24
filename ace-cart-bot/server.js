@@ -33,8 +33,19 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  // --- UI ---
-  if (url.pathname === '/' || url.pathname === '/index.html') {
+  // --- FlashCart app (served from the repo root, one level up) so the app and
+  //     the bot share one origin — no CORS, no "is the bot reachable" guessing.
+  if (url.pathname === '/' || url.pathname === '/index.html' || url.pathname === '/flashcart.html') {
+    try {
+      const html = await readFile(path.join(__dirname, '..', 'flashcart.html'), 'utf8');
+      return send(res, 200, 'text/html', html);
+    } catch {
+      /* fall back to the bot control panel below */
+    }
+  }
+
+  // --- the original cart-bot control panel ---
+  if (url.pathname === '/bot' || url.pathname === '/' || url.pathname === '/index.html') {
     try {
       const html = await readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
       return send(res, 200, 'text/html', html);
@@ -87,11 +98,13 @@ const server = http.createServer(async (req, res) => {
     const zip = url.searchParams.get('zip') || DEFAULT_ZIP;
     const headless = url.searchParams.get('headless') === 'true';
 
-    // Optional target store (sent by FlashCart) → drives the generic adapter.
+    // FlashCart sends either a built-in `site` (e.g. 'ace' → verified adapter)
+    // or a target store → the generic adapter.
+    const site = url.searchParams.get('site') || undefined;
     const storeBase = url.searchParams.get('storeBase');
     const searchTpl = url.searchParams.get('searchTpl');
     const store =
-      storeBase && searchTpl
+      !site && storeBase && searchTpl
         ? { name: url.searchParams.get('storeName') || 'store', baseUrl: storeBase, searchTpl }
         : null;
 
@@ -101,7 +114,7 @@ const server = http.createServer(async (req, res) => {
       return finish();
     }
 
-    addItemsToCart({ items, zip, store, headless, onProgress: (e) => emit('progress', e) })
+    addItemsToCart({ items, zip, ...(site ? { site } : {}), store, headless, onProgress: (e) => emit('progress', e) })
       .then((result) => {
         emit('done', { ok: true, ...result });
         finish();

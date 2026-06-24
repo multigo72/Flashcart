@@ -23,18 +23,22 @@ GitHub Pages) and share the URL.
 ### Auto-building a real cart
 
 A web page can't write to a third-party store's cart on its own (browser same-origin policy +
-store bot-protection). So "Add to cart" calls the local **`ace-cart-bot`** over `http://localhost:8090`,
-and the bot drives a real browser to search each item and click **Add to Cart**. This only works on
-the **same computer** that's running the bot:
+store bot-protection). So **"Build this cart"** hands the kit to the local **`ace-cart-bot`**, which
+drives a real browser to search each item and click **Add to Cart**. The bot now **serves the app
+itself**, so everything is same-origin — just run the bot and open the app from it:
 
 ```bash
-cd ace-cart-bot && npm install && npm start   # bot on :8090
-# then open flashcart.html and tap "Build this cart"
+cd ace-cart-bot && npm install && npm start
+# then open  http://localhost:8090  in your browser
 ```
 
-On a phone (or any machine not running the bot), it falls back to opening the store and listing the
-kit with per-item search links. Point FlashCart at a different bot URL by setting
-`localStorage['fc.bot']`.
+Pick a kit → **Build this cart**. You land on the cart page and the bot opens the store and adds
+each item **in the background** (you can go back to the home screen and it keeps going). The bot's
+browser pauses for the Cloudflare check on Ace, then continues.
+
+This only works on the **same computer** that's running the bot. On a phone — or the hosted/Vercel
+URL — the bot can't be reached, so it falls back to opening the store with per-item search links.
+Point FlashCart at a bot on another host with `localStorage['fc.bot']`.
 
 ## 2. `ace-cart-bot/` — the browser-automation tool
 

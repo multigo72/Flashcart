@@ -74,6 +74,13 @@ export function makeGenericStore({ id = 'generic', name = 'store', baseUrl, sear
       await store.dismissBanners(page, log);
       if (await store.isChallenged(page)) await store.handleChallenge(page, headless, log);
 
+      // Bail clearly if the store served a 404 instead of search results — some
+      // sites (e.g. Sherwin-Williams) have no direct ?search= URL.
+      const pageTitle = (await page.title().catch(() => '')) || '';
+      if (/^404|page not found|drawing a blank|^not found/i.test(pageTitle.trim())) {
+        throw new Error(`${name} has no searchable catalog at that URL ("${pageTitle.slice(0, 40)}") — this store can't be auto-built. Use the manual links.`);
+      }
+
       const idx = await waitForAny(
         [
           () => page.getByRole('button', { name: /add to cart|add to bag/i }),

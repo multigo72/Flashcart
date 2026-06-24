@@ -239,6 +239,9 @@
   .runbadge.running{color:var(--flash);border-color:color-mix(in srgb,var(--flash) 40%,white);background:color-mix(in srgb,var(--flash) 8%,white)}
   .runbadge.done{color:var(--garden);border-color:color-mix(in srgb,var(--garden) 40%,white);background:color-mix(in srgb,var(--garden) 8%,white)}
   .runbadge.error{color:#b91c1c;border-color:#f0c4c4;background:#fdf3f3}
+  .autotag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.02em;padding:1px 6px;border-radius:999px;
+    vertical-align:1px;color:var(--ink-2);background:var(--paper-2);border:1px solid var(--line)}
+  .autotag.on{color:#fff;background:var(--flash);border-color:var(--flash)}
   .openbtn{margin-top:16px}
 
   .foot{padding:20px 18px calc(env(safe-area-inset-bottom) + 24px);color:var(--ink-2);font-size:11.5px;
@@ -262,13 +265,13 @@
 const STORES = {
   ace:     {name:'Ace Hardware',     kind:'Neighborhood hardware', logo:'A', color:'#C8102E',
             area:'Shoreline',  dist:'1.8 mi', home:'https://www.acehardware.com',
-            searchTpl:'https://www.acehardware.com/search?query=%s'},
+            searchTpl:'https://www.acehardware.com/search?query=%s', bot:'ace', auto:true},
   sherwin: {name:'Sherwin-Williams', kind:'Paint & stain store',   logo:'SW',color:'#0B4DA2',
             area:'N. Seattle', dist:'2.3 mi', home:'https://www.sherwin-williams.com',
-            searchTpl:'https://www.sherwin-williams.com/en-us/search?q=%s'},
+            searchTpl:'https://www.sherwin-williams.com/en-us/search?q=%s', auto:false},
   sky:     {name:'Sky Nursery',      kind:'Garden center',         logo:'SN',color:'#2E7D32',
             area:'Shoreline',  dist:'0.9 mi', home:'https://skynursery.com',
-            searchTpl:'https://skynursery.com/?s=%s'},
+            searchTpl:'https://skynursery.com/?s=%s', auto:false},
 };
 const searchUrl = (s,q) => s.searchTpl.replace('%s', encodeURIComponent(q));
 
@@ -374,10 +377,10 @@ function kitView(id){
     return `<div class="store">
       <div class="top">
         <span class="logo" style="background:${s.color}">${e(s.logo)}</span>
-        <div><div class="nm">${e(s.name)}</div><div class="kind">${e(s.kind)}</div></div>
+        <div><div class="nm">${e(s.name)} ${s.auto?'<span class="autotag on">⚡ auto-build</span>':'<span class="autotag">browse only</span>'}</div><div class="kind">${e(s.kind)}</div></div>
         <div class="dist"><b>${e(s.dist)}</b>${e(s.area)}</div>
       </div>
-      <button class="cta" onclick="addToCart('${id}','${sid}')">${I.cart} Build this cart</button>
+      <button class="cta ${s.auto?'':'ghost'}" onclick="addToCart('${id}','${sid}')">${s.auto?`${I.cart} Build this cart`:`${I.ext} Open &amp; shop`}</button>
     </div>`;
   }).join('');
 
@@ -416,11 +419,14 @@ function cartView(kitId, storeId){
       <a href="${searchUrl(s,it)}" target="_blank" rel="noopener">find ${I.ext}</a>
     </div>`).join('');
 
+  const auto = s.auto;
   return `<section class="screen" style="--c:${c}">
     <button class="back" onclick="go('#/kit/${kitId}')">${I.arrow} Back to kit</button>
-    <p class="eyebrow" style="color:var(--c)">Your cart · <span id="runbadge" class="runbadge">ready to build</span></p>
+    <p class="eyebrow" style="color:var(--c)">Your cart · <span id="runbadge" class="runbadge">${auto?'ready to build':'browse only'}</span></p>
     <h1 class="title" style="font-size:28px">${e(k.name)} at ${e(s.name)}</h1>
-    <p class="sub">The cart-bot opens ${e(s.name)}, finds each item, and adds it to the cart. It runs in the background — leave this page and it keeps going.</p>
+    <p class="sub">${auto
+      ? `The cart-bot opens ${e(s.name)}, finds each item, and adds it to the cart — in the background, so you can leave this page and it keeps going.`
+      : `${e(s.name)} doesn't expose a searchable online catalog, so it can't be auto-built. Open the store and tap <b>find</b> on each item to add it yourself.`}</p>
 
     <div class="receipt" style="--c:${c}">
       <div class="rhead">
@@ -431,16 +437,13 @@ function cartView(kitId, storeId){
       <div class="rfoot"><span>${k.items.length} items in kit</span><b>Ready to add</b></div>
     </div>
 
-    <button class="cta openbtn" id="botbtn" onclick="startRun('${kitId}','${storeId}')">${I.cart} Build this cart</button>
-    <div id="botlog" class="botlog" hidden></div>
+    ${auto
+      ? `<button class="cta openbtn" id="botbtn" onclick="startRun('${kitId}','${storeId}')">${I.cart} Build this cart</button>
+    <div id="botlog" class="botlog" hidden></div>`
+      : `<button class="cta openbtn" onclick="window.open('${s.home}','_blank','noopener')">${I.ext} Open ${e(s.name)}</button>
+    <p class="hint" style="text-align:center">Then tap <b>find</b> on any item above to search it at the store.</p>`}
 
-    <details class="manual">
-      <summary>Prefer to do it by hand?</summary>
-      <button class="cta ghost" style="margin-top:10px" onclick="window.open('${s.home}','_blank','noopener')">${I.ext} Open ${e(s.name)}</button>
-      <p class="hint">Then tap <b>find</b> on any item above to search it at the store.</p>
-    </details>
-
-    <div class="note">${I.info}<div><b>How auto-build works —</b> a web page can't write to ${e(s.name)}'s cart directly (browser security + store bot-protection), so FlashCart hands the kit to the <b>cart-bot</b>, which drives a real browser to search each item and click <b>Add&nbsp;to&nbsp;Cart</b>. To use it: run <code>cd ace-cart-bot &amp;&amp; npm start</code>, then open this app at <code>http://localhost:8090</code>. On a phone or the Vercel link the bot can't be reached — use the manual links above.</div></div>
+    <div class="note">${I.info}<div><b>How auto-build works —</b> a web page can't write to a store's cart directly (browser security + store bot-protection), so FlashCart hands the kit to the <b>cart-bot</b>, which drives a real browser to search each item and click <b>Add&nbsp;to&nbsp;Cart</b>. It works on stores with a real online catalog (⚡ <b>Ace Hardware</b> here). To use it: run <code>cd ace-cart-bot &amp;&amp; npm start</code>, then open this app at <code>http://localhost:8090</code>. On a phone or the Vercel link the bot can't be reached.</div></div>
 
     <p class="foot">Wrong store? <a href="#/kit/${kitId}" style="color:var(--ink)">pick the other option →</a></p>
   </section>`;
@@ -469,10 +472,10 @@ function startRun(kitId, storeId){
   const push = (message, level='info') => { r.lines.push({ message, level }); if(onRunUpdate) onRunUpdate(key); };
 
   push(`Opening ${s.name} and adding ${k.items.length} items…`);
-  const qs = new URLSearchParams({
-    items: JSON.stringify(k.items), zip: state.zip, headless: 'false',
-    storeName: s.name, storeBase: s.home, searchTpl: s.searchTpl,
-  });
+  const params = { items: JSON.stringify(k.items), zip: state.zip, headless: 'false' };
+  if (s.bot) params.site = s.bot;                              // verified built-in adapter (Ace)
+  else { params.storeName = s.name; params.storeBase = s.home; params.searchTpl = s.searchTpl; }  // generic
+  const qs = new URLSearchParams(params);
   let gotAny = false;
   try { r.es = new EventSource(`${BOT}/run?` + qs.toString()); }
   catch(_) { r.status = 'error'; push('Cart-bot not reachable on this device.', 'error'); return r; }
@@ -496,8 +499,12 @@ function startRun(kitId, storeId){
   return r;
 }
 
-// "Build this cart": kick off the background run, then drop onto the cart page.
-function addToCart(kitId, storeId){ startRun(kitId, storeId); go(`#/cart/${kitId}/${storeId}`); }
+// "Build this cart": kick off the background run (for auto-build stores), then
+// drop onto the cart page. Browse-only stores just open the cart page.
+function addToCart(kitId, storeId){
+  if(STORES[storeId] && STORES[storeId].auto) startRun(kitId, storeId);
+  go(`#/cart/${kitId}/${storeId}`);
+}
 
 function paintRun(key){
   const r = runs[key]; if(!r) return;
